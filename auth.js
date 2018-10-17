@@ -145,22 +145,67 @@ $divMain.innerHTML = `
 $divMain.appendChild($divSign);
 document.getElementsByTagName('body')[0].appendChild($divMain);
 document.getElementsByTagName('body')[0].appendChild($modalAuth);
+
 let modalAuth = new Modal(document.getElementById('auth')),
-    modalAuthActive = new Modal( document.getElementById('authActive'));
+    modalAuthActive = new Modal(document.getElementById('authActive'));
+
+
 localStorage && localStorage.wif ? window.wif = JSON.parse(localStorage.wif) : window.wif = '';
 localStorage && localStorage.username ? window.username = localStorage.username : window.username = '';
 
 localStorage.wif && localStorage.username ? logOutProcc() : '';
+
+
 document.getElementById('form-login-pass').addEventListener('submit', async (e) => {
     e.preventDefault();
     log = document.getElementById('logged').checked;
     let user = document.getElementById('input-user').value,
         pass = document.getElementById('input-pass').value;
+
+
     try {
-        await steem.api.getAccounts([user], function(err, result) {
-			response = result;
-			console.log('resp: ', response[0].posting.key_auths[0][0]);
-});
+        await steem.api.getAccounts([user], async (err, result) => {
+            
+            response = result;
+            console.log('resp: ', response[0].posting.key_auths[0][0]);
+            
+            try {
+                let keys = await steem.auth.getPrivateKeys(user, pass, roles);
+                console.log('keys: ', keys.postingPubkey);
+                console.log('response key: ', response[0].posting.key_auths[0][0]);
+
+                console.log(response[0].posting.key_auths[0][0] == keys.postingPubkey);
+
+                if (response[0].posting.key_auths[0][0] == keys.postingPubkey) {
+                    username = user;
+                    wif = keys;
+                    let txt = JSON.stringify(keys);
+                    if (log) {
+                        localStorage.wif = txt;
+                        localStorage.username = username;
+                    }
+                    modalAuth.hide();
+                    swal({
+                        type: 'success',
+                        position: 'top-end',
+                        title: 'Success',
+                        html: document.getElementById('auth-true').innerHTML,
+                        toast: true,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    logOutProcc();
+                    cb();
+                } else throw Error();
+            } catch (e) {
+                console.log('here is the error');
+                swal({
+                    type: 'error',
+                    html: `${ document.getElementById('auth-masterorlogin-error').innerHTML }`
+                })
+
+            }
+        });
     } catch (e) {
         swal({
             type: 'error',
@@ -168,38 +213,9 @@ document.getElementById('form-login-pass').addEventListener('submit', async (e) 
             html: `${ document.getElementById('auth-swal-log-html').innerHTML }`,
         })
     }
-    try {
-        let keys = await steem.auth.getPrivateKeys(user, pass, roles);
-		console.log('keys: ', keys.postingPubkey);
-		console.log('response key: ', response[0].posting.key_auths[0][0]);
-        if (response[0].posting.key_auths[0][0] == keys.postingPubkey) {
-            username = user;
-            wif = keys;
-            let txt = JSON.stringify(keys);
-            if(log) {
-                localStorage.wif = txt;
-                localStorage.username = username;
-            }
-            modalAuth.hide();
-            swal({
-                type: 'success',
-                position: 'top-end',
-                title: 'Success',
-                html: document.getElementById('auth-true').innerHTML,
-                toast: true,
-                timer: 1500,
-                showConfirmButton: false
-            });
-            logOutProcc();
-            cb();
-        } else throw Error();;
-    } catch (e) {
-        swal({
-            type: 'error',
-            html: `${ document.getElementById('auth-masterorlogin-error').innerHTML }`
-        })
 
-    }
+
+
 })
 window.i = 0;
 document.getElementById('form-priv').addEventListener('submit', async (e) => {
@@ -209,27 +225,28 @@ document.getElementById('form-priv').addEventListener('submit', async (e) => {
     try {
         let resultWifToPublic = await steem.auth.wifToPublic(priv);
         wif = {};
-        log ? localStorage.wif = JSON.stringify({ posting: priv }) : '';
+        log ? localStorage.wif = JSON.stringify({
+            posting: priv
+        }) : '';
         roles.forEach(key => {
             wif[key] = '';
         });
         wif['posting'] = priv;
-        steem.api.getKeyReferences([resultWifToPublic], function(err, result) {
+        steem.api.getKeyReferences([resultWifToPublic], function (err, result) {
             if (!err) {
-                result.forEach(function(item) {
+                result.forEach(function (item) {
                     username = item[0];
                     log ? localStorage.username = username : '';
                 });
                 modalAuth.hide();
-                if(roles.length > 1 ) {
+                if (roles.length > 1) {
                     i++;
-                    document.getElementById('which-key-h5').innerHTML = 'Please enter only your private <strong>'+roles[i].toUpperCase()+'</strong> key';
-                    document.getElementById('which-key-label').innerHTML = 'Private '+roles[i]+' key';
-                    document.getElementById('input-private-active').setAttribute('placeholder','Private '+roles[i]+' key');
+                    document.getElementById('which-key-h5').innerHTML = 'Please enter only your private <strong>' + roles[i].toUpperCase() + '</strong> key';
+                    document.getElementById('which-key-label').innerHTML = 'Private ' + roles[i] + ' key';
+                    document.getElementById('input-private-active').setAttribute('placeholder', 'Private ' + roles[i] + ' key');
                     document.getElementById('input-private-active').value = ''
                     modalAuthActive.show();
-                }
-                else {
+                } else {
                     cb();
                     logOutProcc();
                 }
@@ -255,39 +272,39 @@ document.getElementById('form-priv').addEventListener('submit', async (e) => {
 document.getElementById('form-priv-active').addEventListener('submit', async (e) => {
     e.preventDefault();
     document.getElementById('input-private-active').className = 'form-control';
-        let priv = document.getElementById('input-private-active').value,
+    let priv = document.getElementById('input-private-active').value,
         resultWifToPublic;
     try {
         resultWifToPublic = await steem.auth.wifToPublic(priv);
-        steem.api.getKeyReferences([resultWifToPublic], function(err, result) {
+        steem.api.getKeyReferences([resultWifToPublic], function (err, result) {
             if (!err) {
-                    if( log ) {
-                        let obj = JSON.parse(localStorage.wif);
-                        obj[roles[i]] = priv;
-                        localStorage.wif = JSON.stringify(obj);
-                    }
-                    for(let s in wif) {
+                if (log) {
+                    let obj = JSON.parse(localStorage.wif);
+                    obj[roles[i]] = priv;
+                    localStorage.wif = JSON.stringify(obj);
+                }
+                for (let s in wif) {
 
-                        if(wif[s] == priv) {
-                            document.getElementById('input-private-active').className = 'form-control is-invalid';
-                            swal({
-                                type: 'error',
-                                position: 'top-end',
-                                title: 'Error',
-                                html: 'Incorrect '+roles[i]+' key',
-                                showConfirmButton: true
-                            });
-                            throw 42;
+                    if (wif[s] == priv) {
+                        document.getElementById('input-private-active').className = 'form-control is-invalid';
+                        swal({
+                            type: 'error',
+                            position: 'top-end',
+                            title: 'Error',
+                            html: 'Incorrect ' + roles[i] + ' key',
+                            showConfirmButton: true
+                        });
+                        throw 42;
 
-                        }
                     }
-                    wif[roles[i]] = priv;
+                }
+                wif[roles[i]] = priv;
                 modalAuthActive.hide();
                 i++;
-                if( roles.length != i ) {
-                    document.getElementById('which-key-h5').innerHTML = 'Please enter only your private <strong>'+roles[i].toUpperCase()+'</strong> key';
-                    document.getElementById('which-key-label').innerHTML = 'Private '+roles[i]+' key';
-                    document.getElementById('input-private-active').setAttribute('placeholder','Private '+roles[i]+' key');
+                if (roles.length != i) {
+                    document.getElementById('which-key-h5').innerHTML = 'Please enter only your private <strong>' + roles[i].toUpperCase() + '</strong> key';
+                    document.getElementById('which-key-label').innerHTML = 'Private ' + roles[i] + ' key';
+                    document.getElementById('input-private-active').setAttribute('placeholder', 'Private ' + roles[i] + ' key');
                     document.getElementById('input-private-active').value = ''
                     modalAuthActive.show();
                 } else {
@@ -318,12 +335,11 @@ window.cb;
 window.roles;
 window.log;
 
-async function auth(bc = function() {}, role = [ 'posting' ]) {
+async function auth(bc = function () {}, role = ['posting']) {
     cb = bc;
     roles = role;
-    if(wif == '') modalAuth.show();
+    if (wif == '') modalAuth.show();
     else cb();
-
 }
 
 function logOutProcc() {
@@ -333,7 +349,7 @@ function logOutProcc() {
     li.id = `li-log`;
     li.innerHTML = `<button class="btn btn-outline-primary my-2 my-sm-0" id="logout"><span class="icon-exit"></span> ${ document.getElementById('logout-text').innerHTML }</button>`;
     document.getElementById('navbar-right').appendChild(li);
-    document.getElementById('logout').addEventListener('click', function() {
+    document.getElementById('logout').addEventListener('click', function () {
         document.getElementById('navbar-right').removeChild(document.getElementById('li-log'));
         swal({
             position: 'top-end',
